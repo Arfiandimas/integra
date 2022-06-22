@@ -9,37 +9,22 @@ class Program
 {
     static MySqlConnection con = new MySqlConnection("Database=integra;Server=localhost;user=barjono;password=password");
 
+    // Connection UDP Send
+    static Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram,ProtocolType.Udp);
+    static IPAddress serverAddr = IPAddress.Parse("192.168.1.23");
+    static IPEndPoint endPoint = new IPEndPoint(serverAddr, 8888);
+
+    // Connection UDP Receive
+    static UdpClient listener = new UdpClient(9999);
+    static IPEndPoint groupEP = new IPEndPoint(IPAddress.Parse("192.168.1.23"), 9999);
+
     static void Main(string[] args)
     {
         SendData();
     }
 
-    static void InsertData(string data, bool is_print, bool is_scan, string created_at, string updated_at)
-    {
-        con.Open();
-        try
-        {
-            using (MySqlCommand command = new MySqlCommand("INSERT INTO print_scan VALUES(@id, @data, @is_print, @is_scan, @created_at, @updated_at)", con))
-            {
-                command.Parameters.Add(new MySqlParameter("id", command.LastInsertedId));
-                command.Parameters.Add(new MySqlParameter("data", data));
-                command.Parameters.Add(new MySqlParameter("is_print", is_print == true ? 1 : 0));
-                command.Parameters.Add(new MySqlParameter("is_scan", is_scan == true ? 1 : 0));
-                command.Parameters.Add(new MySqlParameter("created_at", created_at));
-                command.Parameters.Add(new MySqlParameter("updated_at", updated_at));
-                command.ExecuteNonQuery();
-                Console.WriteLine("Berhasil !");
-            }
-        }
-        catch
-        {
-            Console.WriteLine("gagal menginputkan data ke database.");
-        }
-    }
-
     static void SendData()
     {
-        List<PrintScan> printScans = new List<PrintScan>();
         con.Open();
 
         using (MySqlCommand command = new MySqlCommand("SELECT * FROM print_scan WHERE is_print = 0 ORDER BY created_at ASC LIMIT 1", con))
@@ -53,34 +38,41 @@ class Program
                 bool is_scan = reader.GetBoolean(3);
                 string created_at = reader.GetString(4);
                 string updated_at = reader.GetString(5);
-                printScans.Add(new PrintScan() { id = id, data = data, is_print = is_print, is_scan = is_scan, created_at = created_at, updated_at = updated_at });
+
+                Console.WriteLine(data);
             }
         }
-        
-        UDP(printScans[0].ToString());
+        Console.WriteLine(printScans);
+        // con.Close();
+        // UdpSend(printScans[0].ToString());
     }
 
-    static void UDP(string message = "")
+    static void UdpSend(string message = "")
     {
         Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram,ProtocolType.Udp);
         IPAddress serverAddr = IPAddress.Parse("192.168.1.23");
         IPEndPoint endPoint = new IPEndPoint(serverAddr, 8888);
         byte[] send_buffer = Encoding.ASCII.GetBytes(message);
         sock.SendTo(send_buffer, endPoint);
-    }
-}
 
-public class PrintScan
-{
-    public int id { get; set; }
-    public string data { get; set; }
-    public bool is_print { get; set; }
-    public bool is_scan { get; set; }
-    public string created_at { get; set; }
-    public string updated_at { get; set; }
-    public override string ToString()
-    {
-        // return json.Format("id: {0}, data: {1}, is_print: {2}, is_scan: {3}, created_at: {4}, updated_at: {5}", id, data, is_print, is_scan, created_at, updated_at);
-        return data;
+        try
+        {
+            while (true)
+            {
+                Console.WriteLine("Waiting for response");
+                byte[] bytes = listener.Receive(ref groupEP);
+                string result = Encoding.ASCII.GetString(bytes, 0, bytes.Length);
+                if(result != message){
+                    Console.WriteLine("gagal");
+                } else {
+                    Console.WriteLine(result);
+                    SendData();
+                }
+            }
+        } catch (SocketException e) {
+            Console.WriteLine(e);
+        } finally {
+            listener.Close();
+        }
     }
 }
