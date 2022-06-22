@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using MySql.Data.MySqlClient;
+using System.Text;
+using System.Net.Sockets;
+using System.Net;
 
 class Program
 {
@@ -8,33 +11,7 @@ class Program
 
     static void Main(string[] args)
     {
-        while (true)
-        {
-            Console.WriteLine("Input 'g' untuk GET, input 'c' untuk create : ");
-            string[] check = Console.ReadLine().Split(',');
-            try
-            {
-                char c = char.ToLower(check[0][0]);
-                if (c == 'g'){
-                    GetData();
-                    continue;
-                } else if (c == 'c') {
-                    Console.WriteLine("Input data : ");
-                    string[] input = Console.ReadLine().Split(',');
-                    string data = input[0];
-                    bool is_print = false;
-                    bool is_scan = false;
-                    string created_at = DateTime.Now.ToString("yyyy-MM-dd H:mm:s");
-                    string updated_at = DateTime.Now.ToString("yyyy-MM-dd H:mm:s");
-                    InsertData(data, is_print, is_scan, created_at, updated_at);
-                } else {
-                    Console.WriteLine("Input tidak didefinisikan");
-                }
-                
-            } catch {
-                Console.WriteLine("Input error");
-            }
-        }
+        SendData();
     }
 
     static void InsertData(string data, bool is_print, bool is_scan, string created_at, string updated_at)
@@ -60,12 +37,12 @@ class Program
         }
     }
 
-    static void GetData()
+    static void SendData()
     {
         List<PrintScan> printScans = new List<PrintScan>();
         con.Open();
 
-        using (MySqlCommand command = new MySqlCommand("SELECT * FROM print_scan", con))
+        using (MySqlCommand command = new MySqlCommand("SELECT * FROM print_scan WHERE is_print = 0 ORDER BY created_at ASC LIMIT 1", con))
         {
             MySqlDataReader reader = command.ExecuteReader();
             while (reader.Read())
@@ -79,11 +56,17 @@ class Program
                 printScans.Add(new PrintScan() { id = id, data = data, is_print = is_print, is_scan = is_scan, created_at = created_at, updated_at = updated_at });
             }
         }
+        
+        UDP(printScans[0].ToString());
+    }
 
-        foreach (PrintScan printScan in printScans)
-        {
-            Console.WriteLine(printScan);
-        }
+    static void UDP(string message = "")
+    {
+        Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram,ProtocolType.Udp);
+        IPAddress serverAddr = IPAddress.Parse("192.168.1.23");
+        IPEndPoint endPoint = new IPEndPoint(serverAddr, 8888);
+        byte[] send_buffer = Encoding.ASCII.GetBytes(message);
+        sock.SendTo(send_buffer, endPoint);
     }
 }
 
@@ -97,7 +80,7 @@ public class PrintScan
     public string updated_at { get; set; }
     public override string ToString()
     {
-        return string.Format("id: {0}, data: {1}, is_print: {2}, is_scan: {3}, created_at: {4}, updated_at: {5}",
-            id, data, is_print, is_scan, created_at, updated_at);
+        // return json.Format("id: {0}, data: {1}, is_print: {2}, is_scan: {3}, created_at: {4}, updated_at: {5}", id, data, is_print, is_scan, created_at, updated_at);
+        return data;
     }
 }
